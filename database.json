@@ -1,0 +1,11 @@
+{
+    "defaultEnv":"pg",
+    "sql-file" : true,
+    "pg": {
+    "driver": "pg",
+    "user": "postgres",
+    "password": "Asadawut26641",
+    "host": "localhost",
+    "database": "coffeeshop",
+    "port": "5432"
+}}
