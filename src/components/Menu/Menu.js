@@ -1,183 +1,355 @@
+import { useState, useEffect, useRef } from 'react'
+
 import styles from './Menu.module.css'
-import { useState } from 'react'
 
 import { useHistory } from 'react-router-dom'
-import { nanoid } from 'nanoid'
 
-import { Rate, Drawer, Radio, Form, InputNumber, Input } from 'antd'
+import axios from 'axios'
+import _ from 'lodash'
+
+import {
+  Button,
+  Drawer,
+  Form,
+  Popconfirm,
+  Row,
+  Col,
+  Input,
+  Upload,
+  notification,
+  Select,
+  Divider,
+  InputNumber,
+} from 'antd'
+
 import { IoCartOutline } from 'react-icons/io5'
-import { CgClose } from 'react-icons/cg'
-import { useCartContext } from '../../context/CartContext'
 // import { GrCart } from 'react-icons/gr'
+import { FiEdit, FiTrash2 } from 'react-icons/fi'
+
 // import { CgShoppingCart } from 'react-icons/cg'
 
-import img17 from '../../picture/img17.jpeg'
+const typeOption = [
+  { label: 'Coffee', value: 'COFFEE' },
+  { label: 'Soda', value: 'SODA' },
+  { label: 'Milk', value: 'MILK' },
+]
 
-export function Menu({ data }) {
+export function Menu({ data, stocks, onEditSuccess }) {
   // move to next page
   const history = useHistory()
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const [totalPrice, setTotalPrice] = useState(data.sale_to)
-  const [form] = Form.useForm()
+  const [stockOption, setstockOption] = useState([])
+  const [imgUrl, setImgUrl] = useState([])
+  const [editForm] = Form.useForm()
+  const fileRef = useRef()
+  const [oldImgCount, setOldImgCount] = useState(0)
 
-  const { setCartList } = useCartContext()
-
-  const { TextArea } = Input
-
-  const sweet = [
-    { label: '0%', value: '0%' },
-    { label: '25%', value: '25%' },
-    { label: '50%', value: '50%' },
-    { label: '75%', value: '75%' },
-    { label: '100%', value: '100%' },
-  ]
-
-  function handleClose() {
-    setIsDrawerOpen(false)
-    form.resetFields()
+  const handleUpload = (files) => {
+    if (!files.length) {
+      notification.error({ message: 'Upload file Error!' })
+      return
+    }
+    setImgUrl([])
+    _.forEach(files, (f) => {
+      const reader = new FileReader()
+      reader.onloadend = function () {
+        setImgUrl((old) => [...old, reader.result])
+      }
+      reader.readAsDataURL(f)
+    })
   }
 
+  const fetchMenuDetail = async (name) => {
+    try {
+      const { data } = await axios.get(
+        process.env.REACT_APP_BACKEND + `/menus/${name}`
+      )
+      console.log(data)
+
+      setImgUrl(data.map((d) => d.img))
+      setOldImgCount(data.length)
+    } catch (error) {
+      console.log(error)
+    }
+  }
+  const submitForm = async (formValue) => {
+    try {
+      const { data: result } = await axios.put(
+        process.env.REACT_APP_BACKEND + `/menus/${data.id}`,
+        {
+          ...formValue,
+          image: imgUrl,
+        }
+      )
+      setIsDrawerOpen(false)
+      notification.success({ message: 'Edit menu Success!' })
+      editForm.resetFields()
+      fileRef.current.value = ''
+      onEditSuccess()
+    } catch (error) {
+      console.log(error)
+    }
+  }
+  const deleteMenu = async () => {
+    try {
+      const formValue = editForm.getFieldsValue()
+      const { data: result } = await axios.delete(
+        process.env.REACT_APP_BACKEND + `/menus/${formValue.id}`
+      )
+      setIsDrawerOpen(false)
+      notification.success({ message: 'Delete menu Success!' })
+      editForm.resetFields()
+      onEditSuccess()
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  useEffect(() => {
+    if (data) {
+      fetchMenuDetail(data.name)
+      editForm.setFieldsValue(data)
+    }
+  }, [data])
+
+  useEffect(() => {
+    setstockOption(
+      stocks.map((s) => ({
+        value: s.id,
+        label: s.ingredient_name,
+      }))
+    )
+  }, [stocks])
+
   return (
-    <>
-      <div
-        className={styles.container}
-        onClick={() => history.push(`/menu/${data.name}`)}
-      >
-        {data.status === 0 && (
-          <div className={styles.outOfStock}>
-            <div className={styles.inOutOfStock}>Out of stock</div>
-          </div>
-        )}
-        <div>
-          {/* <img src={data.img} className={styles.img} /> */}
-          <img src={data.img} className={styles.img} />
-        </div>
-        {data.sale_to !== data.price && <div className={styles.sale}>sale</div>}
+    <div className={styles.container}>
+      <div>
+        <img src={data.img} className={styles.img} />
+      </div>
+      {data.sale_to !== data.price && <div className={styles.sale}>sale</div>}
 
-        <div className={styles.coverDetail}>
-          <div className={styles.coverPriceAndName}>
-            <span className={styles.name}>
-              {data.name}
-              {console.log(data)}
-            </span>
-            {/* <div className={styles.rateCustom}>
-              <Rate disabled defaultValue={data.star} className={styles.star} />
-            </div> */}
-
-            {data.sale_to !== data.price ? (
-              <div className={styles.coverPriceSaleTo}>
-                <span className={styles.priceSaleTo}>
-                  {data.price}&nbsp;Baht
-                </span>
-                <span className={styles.price}>{data.sale_to}&nbsp;Baht</span>
-              </div>
-            ) : (
-              <span className={styles.price}>{data.price}&nbsp;Baht</span>
-            )}
-          </div>
-          <div
-            className={styles.button}
-            onClick={(e) => {
-              e.stopPropagation()
-              setIsDrawerOpen(true)
-            }}
-          >
-            <div className={styles.icon}>
-              <IoCartOutline />
+      <div className={styles.coverDetail}>
+        <div className={styles.coverNameAndPrice}>
+          <span className={styles.name}>{data.name}</span>
+          {/* <div className={styles.rateCustom}>
+          <Rate
+            disabled
+            defaultValue={data.star}
+            className={styles.star}
+          />
+        </div> */}
+          {data.sale_to !== data.price ? (
+            <div className={styles.coverPriceSaleTo}>
+              <span className={styles.priceSaleTo}>{data.price}&nbsp;Baht</span>
+              <span className={styles.price}>{data.sale_to}&nbsp;Baht</span>
             </div>
-            <span className={styles.textButton}>ADD TO CART</span>
+          ) : (
+            <span className={styles.price}>{data.price}&nbsp;Baht</span>
+          )}
+          {/* <Form
+            initialValues={{
+              ...data,
+              ingredients: _.get(data, 'ingredients.length')
+                ? data.ingredients
+                : [{ quantity: 1 }],
+            }}
+            layout="vertical"
+            form={editForm}
+          >
+            <div className={styles.coverShowIngredient}>
+              <Form.List name="ingredients">
+                {(fields, ingredientsList) => (
+                  <>
+                    {fields.map(({ name, ...rest }) => (
+                      <div className={styles.showIngredient}>
+                        <Form.Item {...rest} name={[name, 'ingredient_name']}>
+                          <Input noStyle />
+                        </Form.Item>
+                        <Form.Item {...rest} name={[name, 'quantity']}>
+                          <Input noStyle />
+                        </Form.Item>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </Form.List>
+            </div>
+          </Form> */}
+        </div>
+        <div
+          className={styles.button}
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsDrawerOpen(true)
+          }}
+        >
+          <div className={styles.icon}>
+            <FiEdit />
           </div>
+          <span className={styles.textButton}>Edit Menu</span>
         </div>
       </div>
-
       <Drawer
+        title={
+          <Row justify="space-between" align="middle">
+            <Col>Edit Menu</Col>
+            <Col>
+              <Button type="primary" onClick={editForm.submit}>
+                Save
+              </Button>
+            </Col>
+          </Row>
+        }
+        footer={
+          <Popconfirm
+            onConfirm={deleteMenu}
+            title="Are you sure?"
+            okText="Delete"
+            okButtonProps={{ danger: true }}
+          >
+            <Button type="text" danger block>
+              <FiTrash2
+                style={{
+                  marginRight: '1rem',
+                  fontSize: '16px',
+                  marginBottom: '-2px',
+                }}
+              />
+              Delete Menu
+            </Button>
+          </Popconfirm>
+        }
         visible={isDrawerOpen}
-        closable={false}
         className={styles.drawerSweet}
         maskClosable={false}
         keyboard={false}
+        onClose={() => {
+          fileRef.current.value = ''
+          setIsDrawerOpen(false)
+        }}
       >
-        {/* {console.log(
-          form.getFieldsValue().quantity,
-          data.price,
-          data.price * form.getFieldsValue().quantity
-        )} */}
-
         <Form
-          onFieldsChange={() => {
-            setTotalPrice(data.sale_to * form.getFieldsValue().quantity)
+          initialValues={{
+            ...data,
+            ingredients: _.get(data, 'ingredients.length')
+              ? data.ingredients
+              : [{ quantity: 1 }],
           }}
-          form={form}
+          layout="vertical"
+          form={editForm}
           onFinish={(value) => {
-            setCartList((oldCartList) => [
-              ...oldCartList,
-              { ...data, ...value, totalPrice, __id: nanoid(10) },
-            ])
-            handleClose()
-            console.log(value)
+            submitForm(value)
           }}
         >
-          <div
-            className={styles.closeButton}
-            onClick={() => {
-              handleClose()
+          <div>current Image count : {imgUrl.length}</div>
+          {/* <img src={imgUrl[0]} /> */}
+
+          <input
+            multiple
+            ref={fileRef}
+            // style={{ backgroundColor: '#c6a07d' }}
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              handleUpload(e.target.files)
             }}
-          >
-            <CgClose size={20} />
-          </div>
-
-          <div className={styles.titleDrawer}>{data.name}</div>
-          <div className={styles.sweet}>
-            <div className={styles.header}>Sweet</div>
-
-            <Form.Item
-              name="sweet"
-              rules={[{ required: true, message: 'please select Sweet' }]}
-            >
-              <Radio.Group
-                options={sweet}
-                // onChange={this.onChange4}
-                optionType="button"
-                buttonStyle="solid"
-              />
-            </Form.Item>
-          </div>
-          <div className={styles.line} />
-          <div className={styles.coverQuantityPrice}>
-            <div className={styles.coverInQuanPri}>
-              <div className={styles.inputNumberText}>Quantity</div>
-
-              <Form.Item name="quantity" initialValue={1} noStyle>
-                <InputNumber min={1} max={20} style={{ width: '70px' }} />
+          />
+          <br />
+          <Form.Item name="id" noStyle />
+          <Form.Item label="Name" name="name">
+            <Input />
+          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label="Price" name="price">
+                <Input type="number" min={0} />
               </Form.Item>
-            </div>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="Sale Price" name="sale_to">
+                <Input type="number" min={0} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row>
+            <Col span={24}>
+              <Form.Item label="Type" name="type">
+                <Select options={typeOption} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row>
+            <Col span={24}>
+              <Form.Item label="Description" name="description">
+                <Input.TextArea maxLength={200} showCount rows={6} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Divider />
+          <Form.List name="ingredients">
+            {(fields, ingredientsList) => (
+              <>
+                <Row>
+                  <Col span={24}>
+                    {fields.map(({ name, ...rest }) => (
+                      <>
+                        <Row>
+                          <Col span={24}>
+                            <Form.Item
+                              label="Ingredient"
+                              {...rest}
+                              name={[name, 'stock_id']}
+                            >
+                              <Select options={stockOption} />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                        <Row>
+                          <Col span={24}>
+                            <Form.Item
+                              label="Quantity"
+                              {...rest}
+                              name={[name, 'quantity']}
+                            >
+                              <InputNumber min={1} style={{ width: '100%' }} />
+                            </Form.Item>
+                          </Col>
+                        </Row>
 
-            <div className={styles.coverInQuanPri}>
-              <div className={styles.inputNumberText}>Price</div>
-              <div className={styles.countPrice}>
-                {totalPrice}
-                <div>฿</div>
-              </div>
-            </div>
-          </div>
+                        {fields.length > 1 && (
+                          <Button
+                            onClick={() => ingredientsList.remove(name)}
+                            block
+                            danger
+                            type="text"
+                          >
+                            <FiTrash2
+                              style={{
+                                margin: '0 0.5rem -2px 0',
+                                fontSize: '16px',
+                              }}
+                            />
+                            Remove Ingredient
+                          </Button>
+                        )}
+                        <Divider />
+                      </>
+                    ))}
+                  </Col>
+                </Row>
 
-          <div>
-            <div className={styles.header}>Note</div>
-            <Form.Item name="note">
-              <TextArea showCount maxLength={100} style={{ height: 120 }} />
-            </Form.Item>
-          </div>
-
-          <div
-            onClick={() => {
-              form.submit()
-            }}
-            className={styles.addToCartButtonDrawer}
-          >
-            ADD TO CART
-          </div>
+                <Button
+                  block
+                  type="dashed"
+                  onClick={() => ingredientsList.add({ quantity: 1 })}
+                >
+                  + Add Ingredient
+                </Button>
+              </>
+            )}
+          </Form.List>
         </Form>
       </Drawer>
-    </>
+    </div>
   )
 }
